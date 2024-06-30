@@ -23,9 +23,9 @@ public class Transaction {
 
     private BigDecimal amount;
 
-    private User whoSended;
+    private Long whoSended;
 
-    private User whoReceived;
+    private Long whoReceived;
 
     @CreatedDate
     private LocalDateTime createdAt;
