@@ -19,13 +19,13 @@ import java.time.LocalDateTime;
 public class Transaction {
 
     @MongoId
-    private Long transactionId;
+    private String transactionId;
 
     private BigDecimal amount;
 
-    private Long whoSended;
+    private String whoSended;
 
-    private Long whoReceived;
+    private String whoReceived;
 
     @CreatedDate
     private LocalDateTime createdAt;
