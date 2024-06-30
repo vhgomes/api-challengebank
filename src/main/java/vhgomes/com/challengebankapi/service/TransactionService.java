@@ -1,57 +1,68 @@
 package vhgomes.com.challengebankapi.service;
 
-import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import vhgomes.com.challengebankapi.dtos.TransactionCreatedEvent;
 import vhgomes.com.challengebankapi.models.Transaction;
+import vhgomes.com.challengebankapi.models.User;
 import vhgomes.com.challengebankapi.repository.TransactionRepository;
 import vhgomes.com.challengebankapi.repository.UserRepository;
 
 import java.math.BigDecimal;
+import java.util.Optional;
 
 @Service
 public class TransactionService {
+
     private final TransactionRepository transactionRepository;
-    private final MongoTemplate mongoTemplate;
     private final UserRepository userRepository;
 
-
-    public TransactionService(TransactionRepository transactionRepository, MongoTemplate mongoTemplate, UserRepository userRepository) {
+    public TransactionService(TransactionRepository transactionRepository, UserRepository userRepository) {
         this.transactionRepository = transactionRepository;
-        this.mongoTemplate = mongoTemplate;
         this.userRepository = userRepository;
     }
 
     public ResponseEntity<?> createTransaction(TransactionCreatedEvent event) {
         System.out.println(event);
 
-        var userWhoSent = userRepository.findById(event.whoSent());
-        var userWhoReceived = userRepository.findById(event.whoReceive());
+        Optional<User> userWhoSent = userRepository.findById(event.whoSent());
+        Optional<User> userWhoReceived = userRepository.findById(event.whoReceive());
 
-        if (userWhoSent == null && userWhoReceived == null) {
+        if (userWhoSent.isEmpty() || userWhoReceived.isEmpty()) {
             return ResponseEntity.badRequest().build();
         }
 
-        if (verifyIfUserWhoSentHaveMoney(userWhoSent.get().getTotalSaldo(), event.amount()) == true) {
-            var entity = new Transaction();
-            entity.setAmount(event.amount());
-            entity.setWhoSended(userWhoSent.get().getUserId());
-            entity.setWhoReceived(userWhoReceived.get().getUserId());
-            transactionRepository.save(entity);
+        User sender = userWhoSent.get();
+        User receiver = userWhoReceived.get();
 
-            userWhoSent.get().setTotalSaldo(userWhoSent.get().getTotalSaldo().subtract(event.amount()));
-            userWhoReceived.get().setTotalSaldo(userWhoReceived.get().getTotalSaldo().add(event.amount()));
-            userRepository.save(userWhoSent.get());
-            userRepository.save(userWhoReceived.get());
+        if (verifyIfUserWhoSentHaveMoney(sender.getTotalSaldo(), event.amount()) == true) {
+            Transaction transaction = new Transaction();
+            transaction.setAmount(event.amount());
+            transaction.setWhoSended(String.valueOf(sender.getUserId()));
+            transaction.setWhoReceived(String.valueOf(receiver.getUserId()));
 
-            return ResponseEntity.ok(entity);
+            transactionRepository.save(transaction);
+
+            updateUserBalances(sender, receiver, event.amount());
+
+            return ResponseEntity.ok(transaction);
         }
 
         return ResponseEntity.badRequest().build();
     }
 
+    private void updateUserBalances(User sender, User receiver, BigDecimal amount) {
+        sender.setTotalSaldo(sender.getTotalSaldo().subtract(amount));
+        receiver.setTotalSaldo(receiver.getTotalSaldo().add(amount));
+
+        userRepository.save(sender);
+        userRepository.save(receiver);
+    }
+
     private boolean verifyIfUserWhoSentHaveMoney(BigDecimal saldo, BigDecimal amount) {
-        return saldo.compareTo(amount) >= 0;
+        if (BigDecimal.ZERO.compareTo(saldo) >= 0) {
+            return true;
+        }
+        return false;
     }
 }
