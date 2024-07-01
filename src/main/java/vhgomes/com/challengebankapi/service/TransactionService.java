@@ -9,6 +9,7 @@ import vhgomes.com.challengebankapi.repository.TransactionRepository;
 import vhgomes.com.challengebankapi.repository.UserRepository;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.Optional;
 
 @Service
@@ -23,8 +24,6 @@ public class TransactionService {
     }
 
     public ResponseEntity<?> createTransaction(TransactionCreatedEvent event) {
-        System.out.println(event);
-
         Optional<User> userWhoSent = userRepository.findById(event.whoSent());
         Optional<User> userWhoReceived = userRepository.findById(event.whoReceive());
 
@@ -40,7 +39,7 @@ public class TransactionService {
             transaction.setAmount(event.amount());
             transaction.setWhoSended(String.valueOf(sender.getUserId()));
             transaction.setWhoReceived(String.valueOf(receiver.getUserId()));
-
+            transaction.setCreatedAt(LocalDateTime.now());
             transactionRepository.save(transaction);
 
             updateUserBalances(sender, receiver, event.amount());
@@ -60,9 +59,6 @@ public class TransactionService {
     }
 
     private boolean verifyIfUserWhoSentHaveMoney(BigDecimal saldo, BigDecimal amount) {
-        if (BigDecimal.ZERO.compareTo(saldo) >= 0) {
-            return true;
-        }
-        return false;
+        return saldo.compareTo(amount) >= 0;
     }
 }
