@@ -10,7 +10,6 @@ import vhgomes.com.challengebankapi.repository.UserRepository;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
-import java.util.Optional;
 
 @Service
 public class TransactionService {
@@ -23,39 +22,34 @@ public class TransactionService {
         this.userRepository = userRepository;
     }
 
-    public ResponseEntity<?> createTransaction(TransactionCreatedEvent event) {
-        Optional<User> userWhoSent = userRepository.findById(event.whoSent());
-        Optional<User> userWhoReceived = userRepository.findById(event.whoReceive());
-
-        if (userWhoSent.isEmpty() || userWhoReceived.isEmpty()) {
+    public ResponseEntity<?> createTransaction(TransactionCreatedEvent event, User sender, User receiver) {
+        if (!verifyIfUserWhoSentHaveMoney(sender.getTotalSaldo(), event.amount())) {
             return ResponseEntity.badRequest().build();
         }
 
-        User sender = userWhoSent.get();
-        User receiver = userWhoReceived.get();
+        Transaction transaction = new Transaction();
+        transaction.setAmount(event.amount());
+        transaction.setWhoSended(String.valueOf(sender.getUserId()));
+        transaction.setWhoReceived(String.valueOf(receiver.getUserId()));
+        transaction.setCreatedAt(LocalDateTime.now());
+        transactionRepository.save(transaction);
 
-        if (verifyIfUserWhoSentHaveMoney(sender.getTotalSaldo(), event.amount()) == true) {
-            Transaction transaction = new Transaction();
-            transaction.setAmount(event.amount());
-            transaction.setWhoSended(String.valueOf(sender.getUserId()));
-            transaction.setWhoReceived(String.valueOf(receiver.getUserId()));
-            transaction.setCreatedAt(LocalDateTime.now());
-            transactionRepository.save(transaction);
+        updateUserBalances(sender, receiver, event.amount());
 
-            updateUserBalances(sender, receiver, event.amount());
+        return ResponseEntity.ok(transaction);
 
-            return ResponseEntity.ok(transaction);
-        }
-
-        return ResponseEntity.badRequest().build();
     }
 
     private void updateUserBalances(User sender, User receiver, BigDecimal amount) {
-        sender.setTotalSaldo(sender.getTotalSaldo().subtract(amount));
-        receiver.setTotalSaldo(receiver.getTotalSaldo().add(amount));
+        try {
+            sender.setTotalSaldo(sender.getTotalSaldo().subtract(amount));
+            receiver.setTotalSaldo(receiver.getTotalSaldo().add(amount));
 
-        userRepository.save(sender);
-        userRepository.save(receiver);
+            userRepository.save(sender);
+            userRepository.save(receiver);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
     }
 
     private boolean verifyIfUserWhoSentHaveMoney(BigDecimal saldo, BigDecimal amount) {
